@@ -1,0 +1,320 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  FREELANCER
+  RECRUITER
+  ADMIN
+}
+
+enum ProjectStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum MilestoneStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUBMITTED
+  VERIFIED
+  RELEASED
+  REFUNDED
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED_FREELANCER
+  RESOLVED_RECRUITER
+  RESOLVED_SPLIT
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum TransactionType {
+  ESCROW_DEPOSIT
+  MILESTONE_RELEASE
+  STAKE_DEPOSIT
+  STAKE_RETURN
+  STAKE_FORFEIT
+  WITHDRAWAL
+  CREDIT_PURCHASE
+  REFUND
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  name            String
+  role            Role
+  avatarUrl       String?
+  bio             String?
+  skills          String[]
+  portfolioUrl    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  walletBalance   Float     @default(0)
+  creditBalance   Float     @default(0)
+  earnedCredits   Float     @default(0)
+  purchasedCredits Float    @default(0)
+
+  totalProjectsCompleted  Int @default(0)
+  totalProjectsPosted     Int @default(0)
+  onTimeDeliveryCount     Int @default(0)
+
+  projectsPosted    Project[]       @relation("RecruiterProjects")
+  projectsWorked    Project[]       @relation("FreelancerProjects")
+  applications      Application[]
+  reviewsGiven      Review[]        @relation("ReviewsGiven")
+  reviewsReceived   Review[]        @relation("ReviewsReceived")
+  transactions      Transaction[]
+  disputesRaised    Dispute[]       @relation("DisputeRaiser")
+  disputesAgainst   Dispute[]       @relation("DisputeAgainst")
+  messagesSent      Message[]
+  notifications     Notification[]
+  creditLogs        CreditLog[]
+}
+
+model Project {
+  id              String        @id @default(uuid())
+  title           String
+  description     String
+  status          ProjectStatus @default(OPEN)
+  
+  totalAmount     Float
+  escrowAmount    Float         @default(0)
+  stakeAmount     Float         @default(0)
+
+  requiredSkills  String[]
+  deadline        DateTime
+  
+  recruiterId     String
+  recruiter       User          @relation("RecruiterProjects", fields: [recruiterId], references: [id])
+  
+  freelancerId    String?
+  freelancer      User?         @relation("FreelancerProjects", fields: [freelancerId], references: [id])
+
+  backupFreelancerId String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  milestones      Milestone[]
+  applications    Application[]
+  payments        Payment[]
+  disputes        Dispute[]
+  messages        Message[]
+  stateDocs       StateDocument[]
+  recoveryBrief   RecoveryBrief?
+}
+
+model Milestone {
+  id              String          @id @default(uuid())
+  projectId       String
+  project         Project         @relation(fields: [projectId], references: [id])
+
+  title           String
+  description     String
+  amount          Float
+  order           Int
+
+  status          MilestoneStatus @default(PENDING)
+  deadline        DateTime
+
+  proofOfWorkUrl  String?
+  proofNotes      String?
+
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  stateDoc        StateDocument?
+  payment         Payment?
+}
+
+model Application {
+  id            String            @id @default(uuid())
+  projectId     String
+  project       Project           @relation(fields: [projectId], references: [id])
+
+  freelancerId  String
+  freelancer    User              @relation(fields: [freelancerId], references: [id])
+
+  coverLetter   String
+  proposedAmount Float?
+  status        ApplicationStatus @default(PENDING)
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([projectId, freelancerId])
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id])
+
+  milestoneId     String?       @unique
+  milestone       Milestone?    @relation(fields: [milestoneId], references: [id])
+
+  amount          Float
+  status          PaymentStatus @default(PENDING)
+
+  utrNumber       String?
+  upiQrReference  String?
+  paymentNote     String?
+
+  submittedAt     DateTime?
+  verifiedAt      DateTime?
+  releasedAt      DateTime?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+
+  type        TransactionType
+  amount      Float
+  description String
+
+  createdAt   DateTime        @default(now())
+}
+
+model CreditLog {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+
+  change      Float
+  reason      String
+  balanceAfter Float
+
+  createdAt   DateTime  @default(now())
+}
+
+model Review {
+  id          String    @id @default(uuid())
+  projectId   String
+  
+  giverId     String
+  giver       User      @relation("ReviewsGiven", fields: [giverId], references: [id])
+
+  receiverId  String
+  receiver    User      @relation("ReviewsReceived", fields: [receiverId], references: [id])
+
+  rating      Int
+  comment     String
+
+  createdAt   DateTime  @default(now())
+
+  @@unique([projectId, giverId])
+}
+
+model Dispute {
+  id          String        @id @default(uuid())
+  projectId   String
+  project     Project       @relation(fields: [projectId], references: [id])
+
+  raisedById  String
+  raisedBy    User          @relation("DisputeRaiser", fields: [raisedById], references: [id])
+
+  againstId   String
+  against     User          @relation("DisputeAgainst", fields: [againstId], references: [id])
+
+  reason      String
+  evidence    String?
+  adminNotes  String?
+
+  status      DisputeStatus @default(OPEN)
+  resolution  String?
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Message {
+  id          String    @id @default(uuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id])
+
+  senderId    String
+  sender      User      @relation(fields: [senderId], references: [id])
+
+  content     String
+  read        Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+
+  title       String
+  body        String
+  read        Boolean   @default(false)
+  link        String?
+
+  createdAt   DateTime  @default(now())
+}
+
+model StateDocument {
+  id            String    @id @default(uuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id])
+
+  milestoneId   String?   @unique
+  milestone     Milestone? @relation(fields: [milestoneId], references: [id])
+
+  completedWork String
+  remainingWork String
+  technicalNotes String?
+  knownIssues   String?
+  nextSteps     String?
+  filesAndAccess String?
+
+  aiSummary     String?
+
+  createdAt     DateTime  @default(now())
+}
+
+model RecoveryBrief {
+  id              String    @id @default(uuid())
+  projectId       String    @unique
+  project         Project   @relation(fields: [projectId], references: [id])
+
+  completionPercent Float
+  aiGeneratedBrief  String
+  remainingBudget   Float
+
+  createdAt       DateTime  @default(now())
+}
