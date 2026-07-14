@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { getUserByEmail } from "@/services/user.service";
+import { getAuthUser } from "@/lib/get-auth-user";
 import { rejectMilestone, getMilestoneById } from "@/services/milestone.service";
 import { createNotification } from "@/services/notification.service";
 
@@ -9,15 +8,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
   try {
-    const supabase = await createSupabaseServerClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.email) {
+    const user = await getAuthUser();
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const recruiter = await getUserByEmail(session.user.email);
-    if (!recruiter || recruiter.role !== "RECRUITER") {
+    if (user.role !== "RECRUITER") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -26,7 +23,7 @@ export async function POST(
       return NextResponse.json({ error: "Milestone not found" }, { status: 404 });
     }
 
-    if (milestone.project.recruiterId !== recruiter.id) {
+    if (milestone.project.recruiterId !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

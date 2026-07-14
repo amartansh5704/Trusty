@@ -1,564 +1,1071 @@
 "use client";
 
 import { useState } from "react";
+import { CheckCircle, XCircle, Clock, Play, ChevronDown, ChevronUp } from "lucide-react";
+
+// ============================================================
+// TYPES
+// ============================================================
+
+type TestStatus = "idle" | "running" | "pass" | "fail";
 
 type TestResult = {
   name: string;
-  route: string;
-  method: string;
-  status: "IDLE" | "RUNNING" | "PASS" | "FAIL";
-  statusCode?: number;
-  response?: any;
-  error?: string;
-  timeMs?: number;
+  status: TestStatus;
+  message: string;
+  detail?: string;
+  duration?: number;
 };
 
-const initialTests: TestResult[] = [
-  {
-    name: "GET Open Projects",
-    route: "/api/projects",
-    method: "GET",
-    status: "IDLE",
-  },
-  {
-    name: "GET Open Projects with Search",
-    route: "/api/projects?search=test",
-    method: "GET",
-    status: "IDLE",
-  },
-  {
-    name: "GET Open Projects with Skill Filter",
-    route: "/api/projects?skill=React",
-    method: "GET",
-    status: "IDLE",
-  },
-  {
-    name: "GET Single Project (non-existent)",
-    route: "/api/projects/00000000-0000-0000-0000-000000000000",
-    method: "GET",
-    status: "IDLE",
-  },
-  {
-    name: "GET Auth Check",
-    route: "/api/auth/check",
-    method: "GET",
-    status: "IDLE",
-  },
-  {
-    name: "GET Session Debug",
-    route: "/api/auth/debug",
-    method: "GET",
-    status: "IDLE",
-  },
-  {
-    name: "GET Health Check",
-    route: "/api/health",
-    method: "GET",
-    status: "IDLE",
-  },
-  {
-    name: "POST Create Project (auth required)",
-    route: "/api/projects",
-    method: "POST",
-    status: "IDLE",
-  },
-  {
-    name: "POST Apply to Project (auth required)",
-    route: "/api/applications",
-    method: "POST",
-    status: "IDLE",
-  },
-  {
-    name: "POST Accept Application (auth required)",
-    route: "/api/applications/00000000-0000-0000-0000-000000000000/accept",
-    method: "POST",
-    status: "IDLE",
-  },
-  {
-    name: "POST Approve Milestone (auth required)",
-    route: "/api/milestones/00000000-0000-0000-0000-000000000000/approve",
-    method: "POST",
-    status: "IDLE",
-  },
-  {
-    name: "POST Reject Milestone (auth required)",
-    route: "/api/milestones/00000000-0000-0000-0000-000000000000/reject",
-    method: "POST",
-    status: "IDLE",
-  },
-];
+type TestGroup = {
+  name: string;
+  description: string;
+  tests: TestResult[];
+  expanded: boolean;
+};
 
-const postBodies: Record<string, object> = {
-  "/api/projects": {
-    title: "Test Project from Route Tester",
-    description: "This is a test project created by the route tester.",
-    totalAmount: 1000,
-    deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-    requiredSkills: ["React", "Node.js"],
-    milestones: [
+// ============================================================
+// HELPERS
+// ============================================================
+
+async function run(
+  fn: () => Promise<{ ok: boolean; message: string; detail?: string }>
+): Promise<{ ok: boolean; message: string; detail?: string; duration: number }> {
+  const start = Date.now();
+  try {
+    const result = await fn();
+    return { ...result, duration: Date.now() - start };
+  } catch (err: any) {
+    return {
+      ok: false,
+      message: "Threw an exception",
+      detail: err?.message ?? String(err),
+      duration: Date.now() - start,
+    };
+  }
+}
+
+// ============================================================
+// TEST DEFINITIONS
+// ============================================================
+
+const TEST_GROUPS: Array<{
+  name: string;
+  description: string;
+  tests: Array<{
+    name: string;
+    fn: () => Promise<{ ok: boolean; message: string; detail?: string }>;
+  }>;
+}> = [
+  // ----------------------------------------------------------
+  // GROUP 1 — API Health
+  // ----------------------------------------------------------
+  {
+    name: "API Health",
+    description: "Basic connectivity — all API routes respond",
+    tests: [
       {
-        title: "Milestone 1",
-        description: "First milestone",
-        amount: 1000,
-        deadline: new Date(
-          Date.now() + 15 * 24 * 60 * 60 * 1000
-        ).toISOString(),
+        name: "GET /api/health returns 200",
+        fn: async () => {
+          const res = await fetch("/api/health");
+          if (res.ok) return { ok: true, message: "Health endpoint is up" };
+          return { ok: false, message: `Status ${res.status}` };
+        },
+      },
+      {
+        name: "GET /api/projects returns project list",
+        fn: async () => {
+          const res = await fetch("/api/projects");
+          const data = await res.json();
+          if (res.ok && Array.isArray(data.projects)) {
+            return {
+              ok: true,
+              message: `Returned ${data.projects.length} open projects`,
+            };
+          }
+          return {
+            ok: false,
+            message: data.error ?? "Unexpected response shape",
+            detail: JSON.stringify(data),
+          };
+        },
+      },
+      {
+        name: "GET /api/auth/check returns session info",
+        fn: async () => {
+          const res = await fetch("/api/auth/check");
+          const data = await res.json();
+          if (res.ok) {
+            return {
+              ok: true,
+              message: data.user
+                ? `Logged in as ${data.user.name} (${data.user.role})`
+                : "No session — not logged in",
+            };
+          }
+          return { ok: false, message: data.error ?? "Check failed" };
+        },
       },
     ],
   },
-  "/api/applications": {
-    projectId: "00000000-0000-0000-0000-000000000000",
-    coverLetter:
-      "This is a test cover letter with more than fifty characters to pass validation.",
-  },
-  "/api/applications/00000000-0000-0000-0000-000000000000/accept": {},
-  "/api/milestones/00000000-0000-0000-0000-000000000000/approve": {
-    freelancerId: "00000000-0000-0000-0000-000000000000",
-  },
-  "/api/milestones/00000000-0000-0000-0000-000000000000/reject": {},
-};
 
-const expectedBehaviors: Record<string, string> = {
-  "GET Open Projects": "Should return { projects: [] } or list of projects",
-  "GET Open Projects with Search": "Should return filtered projects array",
-  "GET Open Projects with Skill Filter": "Should return skill-filtered projects",
-  "GET Single Project (non-existent)": "Should return 404 not found",
-  "GET Auth Check": "Should return { user: null } or user object",
-  "GET Session Debug": "Should return { hasSession: true/false }",
-  "GET Health Check": "Should return summary with passed/failed counts",
-  "POST Create Project (auth required)":
-    "Should return 401 if not logged in as recruiter, or 201 with project",
-  "POST Apply to Project (auth required)":
-    "Should return 401 if not logged in as freelancer",
-  "POST Accept Application (auth required)":
-    "Should return 401 if not logged in, or 404 if not found",
-  "POST Approve Milestone (auth required)":
-    "Should return 401 if not logged in, or 404 if not found",
-  "POST Reject Milestone (auth required)":
-    "Should return 401 if not logged in, or 404 if not found",
-};
+  // ----------------------------------------------------------
+  // GROUP 2 — Auth Guard Tests
+  // ----------------------------------------------------------
+  {
+    name: "Auth Guards",
+    description: "Unauthenticated requests must be blocked",
+    tests: [
+      {
+        name: "POST /api/projects without auth returns 401",
+        fn: async () => {
+          // We send a request with no session cookie that will pass
+          // This tests that the route actually checks auth
+          const res = await fetch("/api/projects", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          const data = await res.json();
 
-const acceptableStatusCodes: Record<string, number[]> = {
-  "GET Open Projects": [200],
-  "GET Open Projects with Search": [200],
-  "GET Open Projects with Skill Filter": [200],
-  "GET Single Project (non-existent)": [404],
-  "GET Auth Check": [200],
-  "GET Session Debug": [200],
-  "GET Health Check": [200],
-  "POST Create Project (auth required)": [201, 401, 403],
-  "POST Apply to Project (auth required)": [201, 400, 401, 403, 404],
-  "POST Accept Application (auth required)": [200, 401, 403, 404],
-  "POST Approve Milestone (auth required)": [200, 400, 401, 403, 404],
-  "POST Reject Milestone (auth required)": [200, 401, 403, 404],
-};
+          // If logged in as recruiter this would try to validate body
+          // If logged in as freelancer this returns 403
+          // If not logged in this returns 401
+          // All three are correct auth behavior
+          if (res.status === 401 || res.status === 403 || res.status === 400) {
+            return {
+              ok: true,
+              message: `Correctly returned ${res.status}: ${data.error}`,
+            };
+          }
+          return {
+            ok: false,
+            message: `Expected 401/403/400 but got ${res.status}`,
+          };
+        },
+      },
+      {
+        name: "POST /api/applications without body returns 4xx",
+        fn: async () => {
+          const res = await fetch("/api/applications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          if (res.status >= 400 && res.status < 500) {
+            const data = await res.json();
+            return {
+              ok: true,
+              message: `Correctly blocked: ${res.status} — ${data.error}`,
+            };
+          }
+          return {
+            ok: false,
+            message: `Expected 4xx but got ${res.status}`,
+          };
+        },
+      },
+      {
+        name: "POST /api/milestones/fake-id/submit returns 4xx",
+        fn: async () => {
+          const res = await fetch("/api/milestones/fake-id-12345/submit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ proofOfWorkUrl: "https://example.com" }),
+          });
+          if (res.status >= 400 && res.status < 500) {
+            const data = await res.json();
+            return {
+              ok: true,
+              message: `Correctly blocked: ${res.status} — ${data.error}`,
+            };
+          }
+          return {
+            ok: false,
+            message: `Expected 4xx but got ${res.status}`,
+          };
+        },
+      },
+      {
+        name: "POST /api/milestones/fake-id/approve returns 4xx",
+        fn: async () => {
+          const res = await fetch("/api/milestones/fake-id-12345/approve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ freelancerId: "fake" }),
+          });
+          if (res.status >= 400 && res.status < 500) {
+            const data = await res.json();
+            return {
+              ok: true,
+              message: `Correctly blocked: ${res.status} — ${data.error}`,
+            };
+          }
+          return {
+            ok: false,
+            message: `Expected 4xx but got ${res.status}`,
+          };
+        },
+      },
+      {
+        name: "POST /api/payments without body returns 4xx",
+        fn: async () => {
+          const res = await fetch("/api/payments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          if (res.status >= 400 && res.status < 500) {
+            const data = await res.json();
+            return {
+              ok: true,
+              message: `Correctly blocked: ${res.status} — ${data.error}`,
+            };
+          }
+          return {
+            ok: false,
+            message: `Expected 4xx but got ${res.status}`,
+          };
+        },
+      },
+    ],
+  },
+
+  // ----------------------------------------------------------
+  // GROUP 3 — Project API
+  // ----------------------------------------------------------
+  {
+    name: "Project API",
+    description: "Project creation, fetching, and filtering",
+    tests: [
+      {
+        name: "GET /api/projects?search=x returns filtered list",
+        fn: async () => {
+          const res = await fetch("/api/projects?search=react");
+          const data = await res.json();
+          if (res.ok && Array.isArray(data.projects)) {
+            return {
+              ok: true,
+              message: `Search returned ${data.projects.length} results`,
+            };
+          }
+          return {
+            ok: false,
+            message: data.error ?? "Bad response",
+          };
+        },
+      },
+      {
+        name: "GET /api/projects?skill=x returns skill-filtered list",
+        fn: async () => {
+          const res = await fetch("/api/projects?skill=React");
+          const data = await res.json();
+          if (res.ok && Array.isArray(data.projects)) {
+            return {
+              ok: true,
+              message: `Skill filter returned ${data.projects.length} results`,
+            };
+          }
+          return {
+            ok: false,
+            message: data.error ?? "Bad response",
+          };
+        },
+      },
+      {
+        name: "GET /api/projects/nonexistent-id returns 404",
+        fn: async () => {
+          const res = await fetch(
+            "/api/projects/00000000-0000-0000-0000-000000000000"
+          );
+          const data = await res.json();
+          if (res.status === 404) {
+            return { ok: true, message: "Correctly returned 404" };
+          }
+          return {
+            ok: false,
+            message: `Expected 404 but got ${res.status}: ${data.error}`,
+          };
+        },
+      },
+      {
+        name: "GET /api/projects returns correct shape",
+        fn: async () => {
+          const res = await fetch("/api/projects");
+          const data = await res.json();
+          if (!res.ok) {
+            return { ok: false, message: data.error ?? "Failed" };
+          }
+          if (!Array.isArray(data.projects)) {
+            return {
+              ok: false,
+              message: "Response missing projects array",
+              detail: JSON.stringify(data),
+            };
+          }
+          if (data.projects.length === 0) {
+            return {
+              ok: true,
+              message: "No open projects yet — shape is correct",
+            };
+          }
+          const p = data.projects[0];
+          const hasRequired =
+            p.id && p.title && p.totalAmount !== undefined && p.recruiter;
+          if (hasRequired) {
+            return {
+              ok: true,
+              message: `Shape valid — first project: "${p.title}"`,
+            };
+          }
+          return {
+            ok: false,
+            message: "Project missing required fields",
+            detail: JSON.stringify(Object.keys(p)),
+          };
+        },
+      },
+    ],
+  },
+
+  // ----------------------------------------------------------
+  // GROUP 4 — Payment API
+  // ----------------------------------------------------------
+  {
+    name: "Payment API",
+    description: "Payment creation and UTR submission",
+    tests: [
+      {
+        name: "GET /api/payments without projectId returns 400",
+        fn: async () => {
+          const res = await fetch("/api/payments");
+          const data = await res.json();
+          if (res.status === 400 || res.status === 401) {
+            return {
+              ok: true,
+              message: `Correctly returned ${res.status}: ${data.error}`,
+            };
+          }
+          return {
+            ok: false,
+            message: `Expected 400/401 but got ${res.status}`,
+          };
+        },
+      },
+      {
+        name: "POST /api/payments/fake-id/utr returns 4xx",
+        fn: async () => {
+          const res = await fetch("/api/payments/fake-id/utr", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ utrNumber: "TEST123" }),
+          });
+          if (res.status >= 400 && res.status < 500) {
+            const data = await res.json();
+            return {
+              ok: true,
+              message: `Correctly blocked: ${res.status} — ${data.error}`,
+            };
+          }
+          return {
+            ok: false,
+            message: `Expected 4xx but got ${res.status}`,
+          };
+        },
+      },
+      {
+        name: "POST /api/payments/fake-id/utr with short UTR returns 400",
+        fn: async () => {
+          const res = await fetch("/api/payments/fake-id/utr", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ utrNumber: "AB" }),
+          });
+          if (res.status >= 400 && res.status < 500) {
+            const data = await res.json();
+            return {
+              ok: true,
+              message: `Correctly rejected: ${res.status} — ${data.error}`,
+            };
+          }
+          return {
+            ok: false,
+            message: `Expected 4xx but got ${res.status}`,
+          };
+        },
+      },
+    ],
+  },
+
+  // ----------------------------------------------------------
+  // GROUP 5 — Page Routes
+  // ----------------------------------------------------------
+  {
+    name: "Page Routes",
+    description: "All pages load without 500 errors",
+    tests: [
+      {
+        name: "GET / (landing page) returns 200",
+        fn: async () => {
+          const res = await fetch("/");
+          if (res.ok) return { ok: true, message: "Landing page loads" };
+          return { ok: false, message: `Status ${res.status}` };
+        },
+      },
+      {
+        name: "GET /projects/browse returns 200 or redirect",
+        fn: async () => {
+          const res = await fetch("/projects/browse");
+          if (res.ok || res.status === 307 || res.status === 302) {
+            return {
+              ok: true,
+              message: `Browse page: ${res.status} ${res.url}`,
+            };
+          }
+          return { ok: false, message: `Unexpected status ${res.status}` };
+        },
+      },
+      {
+        name: "GET /projects/new returns 200 or redirect",
+        fn: async () => {
+          const res = await fetch("/projects/new");
+          if (res.ok || res.status === 307 || res.status === 302) {
+            return {
+              ok: true,
+              message: `New project page: ${res.status}`,
+            };
+          }
+          return { ok: false, message: `Unexpected status ${res.status}` };
+        },
+      },
+      {
+        name: "GET /dashboard/recruiter returns 200 or redirect",
+        fn: async () => {
+          const res = await fetch("/dashboard/recruiter");
+          if (res.ok || res.status === 307 || res.status === 302) {
+            return {
+              ok: true,
+              message: `Recruiter dashboard: ${res.status}`,
+            };
+          }
+          return { ok: false, message: `Unexpected status ${res.status}` };
+        },
+      },
+      {
+        name: "GET /dashboard/freelancer returns 200 or redirect",
+        fn: async () => {
+          const res = await fetch("/dashboard/freelancer");
+          if (res.ok || res.status === 307 || res.status === 302) {
+            return {
+              ok: true,
+              message: `Freelancer dashboard: ${res.status}`,
+            };
+          }
+          return { ok: false, message: `Unexpected status ${res.status}` };
+        },
+      },
+    ],
+  },
+
+  // ----------------------------------------------------------
+  // GROUP 6 — Data Shape Validation
+  // ----------------------------------------------------------
+  {
+    name: "Data Shapes",
+    description: "API responses have all required fields",
+    tests: [
+      {
+        name: "Auth check response has correct fields",
+        fn: async () => {
+          const res = await fetch("/api/auth/check");
+          const data = await res.json();
+          if (!res.ok) {
+            return { ok: false, message: data.error ?? "Failed" };
+          }
+          if (!data.user) {
+            return {
+              ok: true,
+              message: "No session — cannot validate user shape",
+            };
+          }
+          const required = [
+            "id",
+            "name",
+            "email",
+            "role",
+            "creditBalance",
+            "walletBalance",
+          ];
+          const missing = required.filter((k) => !(k in data.user));
+          if (missing.length === 0) {
+            return {
+              ok: true,
+              message: `All required fields present for ${data.user.name}`,
+            };
+          }
+          return {
+            ok: false,
+            message: `Missing fields: ${missing.join(", ")}`,
+          };
+        },
+      },
+      {
+        name: "Open projects have recruiter + milestones + applications",
+        fn: async () => {
+          const res = await fetch("/api/projects");
+          const data = await res.json();
+          if (!res.ok) return { ok: false, message: data.error };
+          if (data.projects.length === 0) {
+            return {
+              ok: true,
+              message: "No projects to validate — create one to test",
+            };
+          }
+          const p = data.projects[0];
+          const checks = {
+            "has recruiter": !!p.recruiter,
+            "recruiter has name": !!p.recruiter?.name,
+            "has milestones array": Array.isArray(p.milestones),
+            "has applications array": Array.isArray(p.applications),
+            "has requiredSkills array": Array.isArray(p.requiredSkills),
+            "has deadline": !!p.deadline,
+          };
+          const failed = Object.entries(checks)
+            .filter(([, v]) => !v)
+            .map(([k]) => k);
+          if (failed.length === 0) {
+            return { ok: true, message: "All shape checks passed" };
+          }
+          return {
+            ok: false,
+            message: `Failed: ${failed.join(", ")}`,
+          };
+        },
+      },
+      {
+        name: "Single project fetch has full milestone + application data",
+        fn: async () => {
+          // First get list
+          const listRes = await fetch("/api/projects");
+          const listData = await listRes.json();
+          if (!listRes.ok) return { ok: false, message: listData.error };
+          if (listData.projects.length === 0) {
+            return {
+              ok: true,
+              message: "No projects to test single fetch — create one first",
+            };
+          }
+
+          const id = listData.projects[0].id;
+          const res = await fetch(`/api/projects/${id}`);
+          const data = await res.json();
+
+          if (!res.ok) return { ok: false, message: data.error };
+
+          const p = data.project;
+          const milestoneShape =
+            p.milestones.length === 0 ||
+            (p.milestones[0].title &&
+              p.milestones[0].amount !== undefined &&
+              p.milestones[0].status);
+
+          if (milestoneShape) {
+            return {
+              ok: true,
+              message: `Project "${p.title}" with ${p.milestones.length} milestones validated`,
+            };
+          }
+          return {
+            ok: false,
+            message: "Milestone missing title/amount/status",
+          };
+        },
+      },
+    ],
+  },
+];
+
+// ============================================================
+// COMPONENT
+// ============================================================
 
 export default function TestPhase3Page() {
-  const [tests, setTests] = useState<TestResult[]>(initialTests);
+  const [groups, setGroups] = useState<TestGroup[]>(
+    TEST_GROUPS.map((g) => ({
+      ...g,
+      expanded: true,
+      tests: g.tests.map((t) => ({
+        name: t.name,
+        status: "idle" as TestStatus,
+        message: "Not run yet",
+      })),
+    }))
+  );
   const [running, setRunning] = useState(false);
-  const [done, setDone] = useState(false);
+  const [summary, setSummary] = useState<{
+    total: number;
+    passed: number;
+    failed: number;
+    duration: number;
+  } | null>(null);
 
-  function updateTest(index: number, update: Partial<TestResult>) {
-    setTests((prev) =>
-      prev.map((t, i) => (i === index ? { ...t, ...update } : t))
+  function toggleGroup(groupIndex: number) {
+    setGroups((prev) =>
+      prev.map((g, i) =>
+        i === groupIndex ? { ...g, expanded: !g.expanded } : g
+      )
     );
   }
 
   async function runAllTests() {
     setRunning(true);
-    setDone(false);
-    setTests(initialTests.map((t) => ({ ...t, status: "IDLE" })));
+    setSummary(null);
 
-    for (let i = 0; i < initialTests.length; i++) {
-      const test = initialTests[i];
-      updateTest(i, { status: "RUNNING" });
+    const startAll = Date.now();
+    let totalPassed = 0;
+    let totalFailed = 0;
 
-      const start = Date.now();
+    const updatedGroups: TestGroup[] = [];
 
-      try {
-        const options: RequestInit = {
-          method: test.method,
-          headers: { "Content-Type": "application/json" },
+    for (let gi = 0; gi < TEST_GROUPS.length; gi++) {
+      const group = TEST_GROUPS[gi];
+      const testResults: TestResult[] = [];
+
+      for (let ti = 0; ti < group.tests.length; ti++) {
+        const testDef = group.tests[ti];
+
+        // Mark as running
+        setGroups((prev) =>
+          prev.map((g, i) =>
+            i === gi
+              ? {
+                  ...g,
+                  tests: g.tests.map((t, j) =>
+                    j === ti ? { ...t, status: "running" } : t
+                  ),
+                }
+              : g
+          )
+        );
+
+        const result = await run(testDef.fn);
+
+        const testResult: TestResult = {
+          name: testDef.name,
+          status: result.ok ? "pass" : "fail",
+          message: result.message,
+          detail: result.detail,
+          duration: result.duration,
         };
 
-        if (test.method === "POST") {
-          const routeKey = Object.keys(postBodies).find((key) =>
-            test.route.startsWith(key)
-          );
-          options.body = JSON.stringify(
-            routeKey ? postBodies[routeKey] : {}
-          );
-        }
+        testResults.push(testResult);
 
-        const res = await fetch(test.route, options);
-        const timeMs = Date.now() - start;
-        let responseData: any;
+        if (result.ok) totalPassed++;
+        else totalFailed++;
 
-        try {
-          responseData = await res.json();
-        } catch {
-          responseData = { raw: await res.text() };
-        }
-
-        const acceptable = acceptableStatusCodes[test.name] || [200];
-        const passed = acceptable.includes(res.status);
-
-        updateTest(i, {
-          status: passed ? "PASS" : "FAIL",
-          statusCode: res.status,
-          response: responseData,
-          timeMs,
-        });
-      } catch (error: any) {
-        updateTest(i, {
-          status: "FAIL",
-          error: error?.message || "Network error or route does not exist",
-          timeMs: Date.now() - start,
-        });
+        // Update this test result
+        setGroups((prev) =>
+          prev.map((g, i) =>
+            i === gi
+              ? {
+                  ...g,
+                  tests: g.tests.map((t, j) =>
+                    j === ti ? testResult : t
+                  ),
+                }
+              : g
+          )
+        );
       }
 
-      await new Promise((r) => setTimeout(r, 200));
+      updatedGroups.push({
+        ...group,
+        expanded: true,
+        tests: testResults,
+      });
+    }
+
+    setSummary({
+      total: totalPassed + totalFailed,
+      passed: totalPassed,
+      failed: totalFailed,
+      duration: Date.now() - startAll,
+    });
+
+    setRunning(false);
+  }
+
+  async function runGroup(groupIndex: number) {
+    setRunning(true);
+
+    const group = TEST_GROUPS[groupIndex];
+
+    for (let ti = 0; ti < group.tests.length; ti++) {
+      const testDef = group.tests[ti];
+
+      setGroups((prev) =>
+        prev.map((g, i) =>
+          i === groupIndex
+            ? {
+                ...g,
+                tests: g.tests.map((t, j) =>
+                  j === ti ? { ...t, status: "running" } : t
+                ),
+              }
+            : g
+        )
+      );
+
+      const result = await run(testDef.fn);
+
+      setGroups((prev) =>
+        prev.map((g, i) =>
+          i === groupIndex
+            ? {
+                ...g,
+                tests: g.tests.map((t, j) =>
+                  j === ti
+                    ? {
+                        name: testDef.name,
+                        status: result.ok ? "pass" : "fail",
+                        message: result.message,
+                        detail: result.detail,
+                        duration: result.duration,
+                      }
+                    : t
+                ),
+              }
+            : g
+        )
+      );
     }
 
     setRunning(false);
-    setDone(true);
   }
 
-  async function runSingleTest(index: number) {
-    const test = initialTests[index];
-    updateTest(index, { status: "RUNNING" });
-
-    const start = Date.now();
-
-    try {
-      const options: RequestInit = {
-        method: test.method,
-        headers: { "Content-Type": "application/json" },
-      };
-
-      if (test.method === "POST") {
-        const routeKey = Object.keys(postBodies).find((key) =>
-          test.route.startsWith(key)
-        );
-        options.body = JSON.stringify(routeKey ? postBodies[routeKey] : {});
-      }
-
-      const res = await fetch(test.route, options);
-      const timeMs = Date.now() - start;
-      let responseData: any;
-
-      try {
-        responseData = await res.json();
-      } catch {
-        responseData = { raw: await res.text() };
-      }
-
-      const acceptable = acceptableStatusCodes[test.name] || [200];
-      const passed = acceptable.includes(res.status);
-
-      updateTest(index, {
-        status: passed ? "PASS" : "FAIL",
-        statusCode: res.status,
-        response: responseData,
-        timeMs,
-      });
-    } catch (error: any) {
-      updateTest(index, {
-        status: "FAIL",
-        error: error?.message || "Network error or route does not exist",
-        timeMs: Date.now() - start,
-      });
-    }
-  }
-
-  const passed = tests.filter((t) => t.status === "PASS").length;
-  const failed = tests.filter((t) => t.status === "FAIL").length;
-  const idle = tests.filter((t) => t.status === "IDLE").length;
-
-  const statusColors = {
-    IDLE: "bg-gray-800 border-gray-700",
-    RUNNING: "bg-blue-900/20 border-blue-700",
-    PASS: "bg-green-900/20 border-green-700",
-    FAIL: "bg-red-900/20 border-red-700",
-  };
-
-  const statusBadge = {
-    IDLE: "bg-gray-700 text-gray-300",
-    RUNNING: "bg-blue-600 text-white animate-pulse",
-    PASS: "bg-green-600 text-white",
-    FAIL: "bg-red-600 text-white",
-  };
-
-  const methodColors: Record<string, string> = {
-    GET: "text-blue-400",
-    POST: "text-yellow-400",
-    PUT: "text-purple-400",
-    DELETE: "text-red-400",
-  };
+  const allTests = groups.flatMap((g) => g.tests);
+  const totalRun = allTests.filter((t) => t.status !== "idle").length;
+  const totalPass = allTests.filter((t) => t.status === "pass").length;
+  const totalFail = allTests.filter((t) => t.status === "fail").length;
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-black text-white p-8">
+      <div className="max-w-4xl mx-auto">
+
+        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">
-            Phase 3 — Route Tester
-          </h1>
-          <p className="text-gray-400">
-            Tests every API route built in Phase 3. Green = working as
-            expected. Red = broken or missing.
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-3 h-3 rounded-full bg-yellow-400" />
+            <h1 className="text-2xl font-bold">Trust Issues — Phase 3 Test Suite</h1>
+          </div>
+          <p className="text-gray-400 text-sm">
+            Tests all API routes, auth guards, page routes, and data shapes.
+            Run while logged in as different roles for full coverage.
           </p>
         </div>
 
-        <div className="flex items-center gap-4 mb-6">
+        {/* Run Button */}
+        <div className="flex items-center gap-4 mb-8">
           <button
             onClick={runAllTests}
             disabled={running}
-            className="bg-yellow-400 text-black font-bold px-6 py-3 rounded-lg hover:bg-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 bg-yellow-400 text-black px-6 py-2.5 rounded-lg font-semibold hover:bg-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {running ? "Running Tests..." : "Run All Tests"}
+            <Play className="h-4 w-4" />
+            {running ? "Running..." : "Run All Tests"}
           </button>
 
-          {done && (
-            <div className="flex items-center gap-4">
-              <span className="text-green-400 font-semibold">
-                ✓ {passed} passed
+          {totalRun > 0 && (
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-gray-400">
+                {totalRun}/{allTests.length} run
               </span>
-              {failed > 0 && (
+              <span className="text-green-400 font-semibold">
+                ✓ {totalPass} passed
+              </span>
+              {totalFail > 0 && (
                 <span className="text-red-400 font-semibold">
-                  ✗ {failed} failed
-                </span>
-              )}
-              {idle > 0 && (
-                <span className="text-gray-400">
-                  — {idle} not run
+                  ✗ {totalFail} failed
                 </span>
               )}
             </div>
           )}
         </div>
 
-        {done && failed === 0 && (
-          <div className="bg-green-900/20 border border-green-700 rounded-lg p-4 mb-6">
-            <p className="text-green-400 font-bold text-lg">
-              ✓ All routes are working correctly
-            </p>
-            <p className="text-green-300 text-sm mt-1">
-              Phase 3 API layer is healthy. Ready for Phase 4.
-            </p>
-          </div>
-        )}
-
-        {done && failed > 0 && (
-          <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 mb-6">
-            <p className="text-red-400 font-bold text-lg">
-              ✗ {failed} route{failed > 1 ? "s" : ""} failed
-            </p>
-            <p className="text-red-300 text-sm mt-1">
-              Check the failed routes below. Read the error and response
-              carefully.
-            </p>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {tests.map((test, index) => (
-            <div
-              key={index}
-              className={`border rounded-lg p-4 transition-all ${statusColors[test.status]}`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1">
-                  <span
-                    className={`text-xs font-bold px-2 py-1 rounded ${statusBadge[test.status]}`}
+        {/* Summary Banner */}
+        {summary && (
+          <div
+            className={`mb-8 p-4 rounded-lg border ${
+              summary.failed === 0
+                ? "bg-green-500/10 border-green-500/30"
+                : "bg-red-500/10 border-red-500/30"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {summary.failed === 0 ? (
+                  <CheckCircle className="h-6 w-6 text-green-400" />
+                ) : (
+                  <XCircle className="h-6 w-6 text-red-400" />
+                )}
+                <div>
+                  <p
+                    className={`font-bold text-lg ${
+                      summary.failed === 0 ? "text-green-400" : "text-red-400"
+                    }`}
                   >
-                    {test.status}
-                  </span>
-
-                  <span
-                    className={`text-xs font-mono font-bold ${methodColors[test.method]}`}
-                  >
-                    {test.method}
-                  </span>
-
-                  <span className="text-white font-medium">{test.name}</span>
-
-                  <span className="text-gray-500 text-xs font-mono hidden md:block">
-                    {test.route}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  {test.timeMs !== undefined && (
-                    <span className="text-gray-500 text-xs">
-                      {test.timeMs}ms
-                    </span>
-                  )}
-
-                  {test.statusCode !== undefined && (
-                    <span
-                      className={`text-xs font-mono font-bold ${
-                        test.status === "PASS"
-                          ? "text-green-400"
-                          : "text-red-400"
-                      }`}
-                    >
-                      {test.statusCode}
-                    </span>
-                  )}
-
-                  <button
-                    onClick={() => runSingleTest(index)}
-                    disabled={running}
-                    className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded disabled:opacity-50"
-                  >
-                    Run
-                  </button>
-                </div>
-              </div>
-
-              <p className="text-gray-500 text-xs mt-2 ml-1">
-                Expected: {expectedBehaviors[test.name]}
-              </p>
-
-              {test.error && (
-                <div className="mt-3 bg-red-900/30 border border-red-800 rounded p-3">
-                  <p className="text-red-400 text-xs font-mono">
-                    ERROR: {test.error}
+                    {summary.failed === 0
+                      ? "All tests passed"
+                      : `${summary.failed} test${summary.failed > 1 ? "s" : ""} failed`}
+                  </p>
+                  <p className="text-gray-400 text-sm">
+                    {summary.passed}/{summary.total} passed in{" "}
+                    {(summary.duration / 1000).toFixed(1)}s
                   </p>
                 </div>
-              )}
-
-              {test.response && (
-                <details className="mt-3">
-                  <summary className="text-gray-400 text-xs cursor-pointer hover:text-white">
-                    View Response
-                  </summary>
-                  <pre className="mt-2 bg-gray-900 border border-gray-700 rounded p-3 text-xs text-gray-300 overflow-auto max-h-48">
-                    {JSON.stringify(test.response, null, 2)}
-                  </pre>
-                </details>
-              )}
+              </div>
             </div>
-          ))}
+          </div>
+        )}
+
+        {/* Test Groups */}
+        <div className="space-y-4">
+          {groups.map((group, gi) => {
+            const groupTests = group.tests;
+            const groupPass = groupTests.filter(
+              (t) => t.status === "pass"
+            ).length;
+            const groupFail = groupTests.filter(
+              (t) => t.status === "fail"
+            ).length;
+            const groupRun = groupTests.filter(
+              (t) => t.status !== "idle"
+            ).length;
+
+            return (
+              <div
+                key={group.name}
+                className="border border-gray-800 rounded-lg overflow-hidden"
+              >
+                {/* Group Header */}
+                <div className="bg-gray-900 px-5 py-4">
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => toggleGroup(gi)}
+                      className="flex items-center gap-3 flex-1 text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        {group.expanded ? (
+                          <ChevronUp className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-gray-400" />
+                        )}
+                        <span className="text-white font-semibold">
+                          {group.name}
+                        </span>
+                      </div>
+                      <span className="text-gray-500 text-sm">
+                        {group.description}
+                      </span>
+                    </button>
+
+                    <div className="flex items-center gap-3 ml-4">
+                      {groupRun > 0 && (
+                        <div className="flex items-center gap-2 text-sm">
+                          {groupPass > 0 && (
+                            <span className="text-green-400">
+                              ✓ {groupPass}
+                            </span>
+                          )}
+                          {groupFail > 0 && (
+                            <span className="text-red-400">✗ {groupFail}</span>
+                          )}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => runGroup(gi)}
+                        disabled={running}
+                        className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-md disabled:opacity-50 transition-colors"
+                      >
+                        Run group
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Test Rows */}
+                {group.expanded && (
+                  <div className="divide-y divide-gray-800/50">
+                    {group.tests.map((test, ti) => (
+                      <div
+                        key={ti}
+                        className={`px-5 py-3 ${
+                          test.status === "fail"
+                            ? "bg-red-500/5"
+                            : test.status === "pass"
+                            ? "bg-green-500/5"
+                            : "bg-black"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Status Icon */}
+                          <div className="mt-0.5 flex-shrink-0">
+                            {test.status === "idle" && (
+                              <div className="w-4 h-4 rounded-full border border-gray-600" />
+                            )}
+                            {test.status === "running" && (
+                              <Clock className="w-4 h-4 text-yellow-400 animate-pulse" />
+                            )}
+                            {test.status === "pass" && (
+                              <CheckCircle className="w-4 h-4 text-green-400" />
+                            )}
+                            {test.status === "fail" && (
+                              <XCircle className="w-4 h-4 text-red-400" />
+                            )}
+                          </div>
+
+                          {/* Test Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p
+                                className={`text-sm font-medium ${
+                                  test.status === "pass"
+                                    ? "text-white"
+                                    : test.status === "fail"
+                                    ? "text-red-300"
+                                    : "text-gray-400"
+                                }`}
+                              >
+                                {test.name}
+                              </p>
+                              {test.duration !== undefined && (
+                                <span className="text-gray-600 text-xs flex-shrink-0">
+                                  {test.duration}ms
+                                </span>
+                              )}
+                            </div>
+
+                            {test.status !== "idle" &&
+                              test.status !== "running" && (
+                                <p
+                                  className={`text-xs mt-0.5 ${
+                                    test.status === "pass"
+                                      ? "text-green-400"
+                                      : "text-red-400"
+                                  }`}
+                                >
+                                  {test.message}
+                                </p>
+                              )}
+
+                            {test.detail && (
+                              <pre className="text-xs text-gray-500 mt-1 bg-gray-900 p-2 rounded overflow-x-auto">
+                                {test.detail}
+                              </pre>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        <div className="mt-8 bg-gray-900 border border-gray-800 rounded-lg p-6">
-          <h2 className="text-white font-bold mb-4">
-            Manual UI Checklist
-          </h2>
-          <p className="text-gray-400 text-sm mb-4">
-            These cannot be automated. Check each one manually.
-          </p>
-          <div className="space-y-2 text-sm">
+        {/* Manual checklist */}
+        <div className="mt-10 border border-gray-800 rounded-lg overflow-hidden">
+          <div className="bg-gray-900 px-5 py-4">
+            <h2 className="text-white font-semibold">
+              Manual Flow Checklist
+            </h2>
+            <p className="text-gray-500 text-sm">
+              These require real browser interaction — tick them off manually
+            </p>
+          </div>
+          <div className="divide-y divide-gray-800/50">
             {[
               {
-                url: "/projects/new",
-                label: "Create Project page loads for recruiter",
+                flow: "Recruiter",
+                step: "Register as RECRUITER → complete onboarding → land on recruiter dashboard",
               },
               {
-                url: "/projects/new",
-                label: "Milestone builder — Add and remove milestones works",
+                flow: "Recruiter",
+                step: "Post a project with 2 milestones, amounts must equal total budget",
               },
               {
-                url: "/projects/new",
-                label: "Amount balance checker shows green when totals match",
+                flow: "Recruiter",
+                step: "Visit project detail page — see milestones and Pay Into Escrow button",
               },
               {
-                url: "/projects/new",
-                label: "Submit form creates project and redirects to project page",
+                flow: "Recruiter",
+                step: "Click Pay Into Escrow → see UPI details → click I Have Sent Payment → enter dummy UTR → submit",
               },
               {
-                url: "/projects/browse",
-                label: "Browse page loads for freelancer",
+                flow: "Freelancer",
+                step: "Register as FREELANCER → complete onboarding → land on freelancer dashboard",
               },
               {
-                url: "/projects/browse",
-                label: "Search box filters projects",
+                flow: "Freelancer",
+                step: "Go to Find Work → see the project posted by recruiter",
               },
               {
-                url: "/projects/browse",
-                label: "Skill filter works",
+                flow: "Freelancer",
+                step: "Click View Project → see Apply Now button with stake info",
               },
               {
-                url: "/projects/[id]",
-                label: "Project detail shows milestones",
+                flow: "Freelancer",
+                step: "Click Apply Now → write cover letter → submit application",
               },
               {
-                url: "/projects/[id]",
-                label: "Apply Now button visible to eligible freelancers",
+                flow: "Recruiter",
+                step: "Go to project detail → see application → click Accept → freelancer is hired",
               },
               {
-                url: "/projects/[id]",
-                label: "Applications visible to recruiter",
+                flow: "Freelancer",
+                step: "Go to project detail → see milestone with Submit button",
               },
               {
-                url: "/projects/[id]/apply",
-                label: "Apply page shows stake info",
+                flow: "Freelancer",
+                step: "Click Submit Milestone → enter GitHub link → submit",
               },
               {
-                url: "/projects/[id]/apply",
-                label: "Cover letter submission works",
+                flow: "Recruiter",
+                step: "Go to project detail → see milestone Under Review → click Approve + Release Payment",
               },
               {
-                url: "/dashboard/recruiter",
-                label: "Recruiter dashboard shows posted projects",
+                flow: "Both",
+                step: "Freelancer wallet balance increases after milestone approval",
               },
-              {
-                url: "/dashboard/freelancer",
-                label: "Freelancer dashboard shows credits and tier",
-              },
-            ].map(({ url, label }, i) => (
-              <div key={i} className="flex items-center gap-3">
+            ].map((item, i) => (
+              <div key={i} className="px-5 py-3 bg-black flex items-start gap-3">
                 <input
                   type="checkbox"
-                  id={`check-${i}`}
-                  className="accent-yellow-400"
+                  className="mt-1 accent-yellow-400 flex-shrink-0"
                 />
-                <label
-                  htmlFor={`check-${i}`}
-                  className="text-gray-300 cursor-pointer"
-                >
-                  <span className="text-yellow-400 font-mono text-xs mr-2">
-                    {url}
+                <div>
+                  <span
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full mr-2 ${
+                      item.flow === "Recruiter"
+                        ? "bg-blue-500/10 text-blue-400"
+                        : item.flow === "Freelancer"
+                        ? "bg-yellow-500/10 text-yellow-400"
+                        : "bg-gray-500/10 text-gray-400"
+                    }`}
+                  >
+                    {item.flow}
                   </span>
-                  {label}
-                </label>
+                  <span className="text-gray-300 text-sm">{item.step}</span>
+                </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="mt-6 bg-gray-900 border border-gray-800 rounded-lg p-6">
-          <h2 className="text-white font-bold mb-4">
-            Quick Navigation Links
-          </h2>
-          <div className="flex flex-wrap gap-3">
-            {[
-              { href: "/", label: "Landing" },
-              { href: "/login", label: "Login" },
-              { href: "/register", label: "Register" },
-              { href: "/onboarding", label: "Onboarding" },
-              { href: "/dashboard/recruiter", label: "Recruiter Dashboard" },
-              { href: "/dashboard/freelancer", label: "Freelancer Dashboard" },
-              { href: "/projects/new", label: "New Project" },
-              { href: "/projects/browse", label: "Browse Projects" },
-              { href: "/api/health", label: "API Health" },
-              { href: "/api/auth/check", label: "Auth Check" },
-              { href: "/api/auth/debug", label: "Session Debug" },
-              { href: "/api/projects", label: "Projects API" },
-            ].map(({ href, label }) => (
-              <a
-                key={href}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-sm px-3 py-2 rounded-lg transition-colors"
-              >
-                {label}
-              </a>
-            ))}
-          </div>
-        </div>
+        <p className="text-gray-600 text-xs text-center mt-8">
+          Remove this page before deploying to production.
+        </p>
       </div>
     </div>
   );

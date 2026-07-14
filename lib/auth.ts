@@ -6,13 +6,14 @@ export async function getCurrentUser() {
     const supabase = await createSupabaseServerClient();
 
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
+      data: { user: authUser },
+      error,
+    } = await supabase.auth.getUser();
 
-    if (!session?.user?.email) return null;
+    if (error || !authUser?.email) return null;
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: authUser.email },
     });
 
     return user;

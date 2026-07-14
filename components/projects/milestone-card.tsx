@@ -4,7 +4,14 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Clock, XCircle, Upload, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  CheckCircle,
+  Clock,
+  XCircle,
+  Upload,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { showSuccess, showError } from "@/lib/toast";
 import Link from "next/link";
@@ -56,7 +63,7 @@ export default function MilestoneCard({
       icon: <Upload className="h-3 w-3" />,
     },
     APPROVED: {
-      label: "Approved",
+      label: "Approved — Awaiting Payment",
       color: "bg-green-500/10 text-green-400 border-green-500/30",
       icon: <CheckCircle className="h-3 w-3" />,
     },
@@ -83,7 +90,10 @@ export default function MilestoneCard({
     });
 
     if (res.ok) {
-      showSuccess("Milestone approved", "Payment released to freelancer.");
+      showSuccess(
+        "Milestone approved",
+        "Payment release request sent to admin for processing."
+      );
       window.location.reload();
     } else {
       const data = await res.json();
@@ -168,28 +178,21 @@ export default function MilestoneCard({
             )}
 
             <div className="flex gap-2">
-              {isFreelancer && milestone.status === "PENDING" && (
-                <Link
-                  href={`/projects/${projectId}/submit?milestone=${milestone.id}`}
-                  className="flex-1"
-                >
-                  <Button className="w-full bg-yellow-400 text-black hover:bg-yellow-300 font-semibold">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Submit Milestone
-                  </Button>
-                </Link>
-              )}
-
-              {isFreelancer && milestone.status === "REJECTED" && (
-                <Link
-                  href={`/projects/${projectId}/submit?milestone=${milestone.id}`}
-                  className="flex-1"
-                >
-                  <Button className="w-full bg-yellow-400 text-black hover:bg-yellow-300 font-semibold">
-                    Resubmit Milestone
-                  </Button>
-                </Link>
-              )}
+              {isFreelancer &&
+                (milestone.status === "PENDING" ||
+                  milestone.status === "REJECTED") && (
+                  <Link
+                    href={`/projects/${projectId}/submit?milestone=${milestone.id}`}
+                    className="flex-1"
+                  >
+                    <Button className="w-full bg-yellow-400 text-black hover:bg-yellow-300 font-semibold">
+                      <Upload className="h-4 w-4 mr-2" />
+                      {milestone.status === "REJECTED"
+                        ? "Resubmit Milestone"
+                        : "Submit Milestone"}
+                    </Button>
+                  </Link>
+                )}
 
               {isRecruiter && milestone.status === "SUBMITTED" && (
                 <>
@@ -199,7 +202,7 @@ export default function MilestoneCard({
                     className="flex-1 bg-green-600 hover:bg-green-500 text-white font-semibold"
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    Approve + Release Payment
+                    Approve Milestone
                   </Button>
                   <Button
                     onClick={handleReject}

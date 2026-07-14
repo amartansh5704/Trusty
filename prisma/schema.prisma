@@ -62,63 +62,89 @@ enum TransactionType {
   REFUND
 }
 
+enum EscrowStatus {
+  HOLDING
+  PARTIALLY_RELEASED
+  FULLY_RELEASED
+  REFUNDED
+}
+
+enum ReleaseStatus {
+  PENDING
+  APPROVED
+  PARTIALLY_APPROVED
+  REFUNDED
+}
+
+enum HirePaymentStatus {
+  PENDING_PAYMENT
+  PAYMENT_SUBMITTED
+  ADMIN_VERIFIED
+  ESCROW_ACTIVE
+  CANCELLED
+}
+
 model User {
-  id              String    @id @default(uuid())
-  email           String    @unique
-  name            String
-  role            Role
-  avatarUrl       String?
-  bio             String?
-  skills          String[]
-  portfolioUrl    String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  role         Role
+  avatarUrl    String?
+  bio          String?
+  skills       String[]
+  portfolioUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  walletBalance   Float     @default(0)
-  creditBalance   Float     @default(0)
-  earnedCredits   Float     @default(0)
-  purchasedCredits Float    @default(0)
+  walletBalance    Float @default(0)
+  creditBalance    Float @default(0)
+  earnedCredits    Float @default(0)
+  purchasedCredits Float @default(0)
 
-  totalProjectsCompleted  Int @default(0)
-  totalProjectsPosted     Int @default(0)
-  onTimeDeliveryCount     Int @default(0)
+  totalProjectsCompleted Int @default(0)
+  totalProjectsPosted    Int @default(0)
+  onTimeDeliveryCount    Int @default(0)
 
-  projectsPosted    Project[]       @relation("RecruiterProjects")
-  projectsWorked    Project[]       @relation("FreelancerProjects")
-  applications      Application[]
-  reviewsGiven      Review[]        @relation("ReviewsGiven")
-  reviewsReceived   Review[]        @relation("ReviewsReceived")
-  transactions      Transaction[]
-  disputesRaised    Dispute[]       @relation("DisputeRaiser")
-  disputesAgainst   Dispute[]       @relation("DisputeAgainst")
-  messagesSent      Message[]
-  notifications     Notification[]
-  creditLogs        CreditLog[]
+  projectsPosted        Project[]                 @relation("RecruiterProjects")
+  projectsWorked        Project[]                 @relation("FreelancerProjects")
+  applications          Application[]
+  reviewsGiven          Review[]                  @relation("ReviewsGiven")
+  reviewsReceived       Review[]                  @relation("ReviewsReceived")
+  transactions          Transaction[]
+  disputesRaised        Dispute[]                 @relation("DisputeRaiser")
+  disputesAgainst       Dispute[]                 @relation("DisputeAgainst")
+  messagesSent          Message[]
+  notifications         Notification[]
+  creditLogs            CreditLog[]
+  walletTopUps          WalletTopUp[]
+  escrowReleaseRequests MilestoneReleaseRequest[] @relation("FreelancerReleaseRequests")
+  recruiterHires        PendingHire[]             @relation("RecruiterHires")
+  freelancerHires       PendingHire[]             @relation("FreelancerHires")
 }
 
 model Project {
-  id              String        @id @default(uuid())
-  title           String
-  description     String
-  status          ProjectStatus @default(OPEN)
-  
-  totalAmount     Float
-  escrowAmount    Float         @default(0)
-  stakeAmount     Float         @default(0)
+  id          String        @id @default(uuid())
+  title       String
+  description String
+  status      ProjectStatus @default(OPEN)
 
-  requiredSkills  String[]
-  deadline        DateTime
-  
-  recruiterId     String
-  recruiter       User          @relation("RecruiterProjects", fields: [recruiterId], references: [id])
-  
-  freelancerId    String?
-  freelancer      User?         @relation("FreelancerProjects", fields: [freelancerId], references: [id])
+  totalAmount  Float
+  escrowAmount Float @default(0)
+  stakeAmount  Float @default(0)
+
+  requiredSkills String[]
+  deadline       DateTime
+
+  recruiterId String
+  recruiter   User   @relation("RecruiterProjects", fields: [recruiterId], references: [id])
+
+  freelancerId String?
+  freelancer   User?   @relation("FreelancerProjects", fields: [freelancerId], references: [id])
 
   backupFreelancerId String?
 
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   milestones      Milestone[]
   applications    Application[]
@@ -127,194 +153,285 @@ model Project {
   messages        Message[]
   stateDocs       StateDocument[]
   recoveryBrief   RecoveryBrief?
+  escrowHold      EscrowHold?
+  releaseRequests MilestoneReleaseRequest[]
+  pendingHires    PendingHire[]
 }
 
 model Milestone {
-  id              String          @id @default(uuid())
-  projectId       String
-  project         Project         @relation(fields: [projectId], references: [id])
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
 
-  title           String
-  description     String
-  amount          Float
-  order           Int
+  title       String
+  description String
+  amount      Float
+  order       Int
 
-  status          MilestoneStatus @default(PENDING)
-  deadline        DateTime
+  status   MilestoneStatus @default(PENDING)
+  deadline DateTime
 
-  proofOfWorkUrl  String?
-  proofNotes      String?
+  proofOfWorkUrl String?
+  proofNotes     String?
 
-  submittedAt     DateTime?
-  approvedAt      DateTime?
+  submittedAt DateTime?
+  approvedAt  DateTime?
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  stateDoc        StateDocument?
-  payment         Payment?
+  stateDoc       StateDocument?
+  payment        Payment?
+  releaseRequest MilestoneReleaseRequest?
 }
 
 model Application {
-  id            String            @id @default(uuid())
-  projectId     String
-  project       Project           @relation(fields: [projectId], references: [id])
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
 
-  freelancerId  String
-  freelancer    User              @relation(fields: [freelancerId], references: [id])
+  freelancerId String
+  freelancer   User   @relation(fields: [freelancerId], references: [id])
 
-  coverLetter   String
+  coverLetter    String
   proposedAmount Float?
-  status        ApplicationStatus @default(PENDING)
+  status         ApplicationStatus @default(PENDING)
 
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pendingHire PendingHire?
 
   @@unique([projectId, freelancerId])
 }
 
 model Payment {
-  id              String        @id @default(uuid())
-  projectId       String
-  project         Project       @relation(fields: [projectId], references: [id])
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
 
-  milestoneId     String?       @unique
-  milestone       Milestone?    @relation(fields: [milestoneId], references: [id])
+  milestoneId String?    @unique
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id])
 
-  amount          Float
-  status          PaymentStatus @default(PENDING)
+  amount Float
+  status PaymentStatus @default(PENDING)
 
-  utrNumber       String?
-  upiQrReference  String?
-  paymentNote     String?
+  utrNumber      String?
+  upiQrReference String?
+  paymentNote    String?
 
-  submittedAt     DateTime?
-  verifiedAt      DateTime?
-  releasedAt      DateTime?
+  submittedAt DateTime?
+  verifiedAt  DateTime?
+  releasedAt  DateTime?
 
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Transaction {
-  id          String          @id @default(uuid())
-  userId      String
-  user        User            @relation(fields: [userId], references: [id])
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   type        TransactionType
   amount      Float
   description String
 
-  createdAt   DateTime        @default(now())
+  createdAt DateTime @default(now())
 }
 
 model CreditLog {
-  id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
-  change      Float
-  reason      String
+  change       Float
+  reason       String
   balanceAfter Float
 
-  createdAt   DateTime  @default(now())
+  createdAt DateTime @default(now())
 }
 
 model Review {
-  id          String    @id @default(uuid())
-  projectId   String
-  
-  giverId     String
-  giver       User      @relation("ReviewsGiven", fields: [giverId], references: [id])
+  id        String @id @default(uuid())
+  projectId String
 
-  receiverId  String
-  receiver    User      @relation("ReviewsReceived", fields: [receiverId], references: [id])
+  giverId String
+  giver   User   @relation("ReviewsGiven", fields: [giverId], references: [id])
 
-  rating      Int
-  comment     String
+  receiverId String
+  receiver   User   @relation("ReviewsReceived", fields: [receiverId], references: [id])
 
-  createdAt   DateTime  @default(now())
+  rating  Int
+  comment String
+
+  createdAt DateTime @default(now())
 
   @@unique([projectId, giverId])
 }
 
 model Dispute {
-  id          String        @id @default(uuid())
-  projectId   String
-  project     Project       @relation(fields: [projectId], references: [id])
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
 
-  raisedById  String
-  raisedBy    User          @relation("DisputeRaiser", fields: [raisedById], references: [id])
+  raisedById String
+  raisedBy   User   @relation("DisputeRaiser", fields: [raisedById], references: [id])
 
-  againstId   String
-  against     User          @relation("DisputeAgainst", fields: [againstId], references: [id])
+  againstId String
+  against   User   @relation("DisputeAgainst", fields: [againstId], references: [id])
 
-  reason      String
-  evidence    String?
-  adminNotes  String?
+  reason     String
+  evidence   String?
+  adminNotes String?
 
-  status      DisputeStatus @default(OPEN)
-  resolution  String?
+  status     DisputeStatus @default(OPEN)
+  resolution String?
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Message {
-  id          String    @id @default(uuid())
-  projectId   String
-  project     Project   @relation(fields: [projectId], references: [id])
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
 
-  senderId    String
-  sender      User      @relation(fields: [senderId], references: [id])
+  senderId String
+  sender   User   @relation(fields: [senderId], references: [id])
 
-  content     String
-  read        Boolean   @default(false)
+  content String
+  read    Boolean @default(false)
 
-  createdAt   DateTime  @default(now())
+  createdAt DateTime @default(now())
 }
 
 model Notification {
-  id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
-  title       String
-  body        String
-  read        Boolean   @default(false)
-  link        String?
+  title String
+  body  String
+  read  Boolean @default(false)
+  link  String?
 
-  createdAt   DateTime  @default(now())
+  createdAt DateTime @default(now())
 }
 
 model StateDocument {
-  id            String    @id @default(uuid())
-  projectId     String
-  project       Project   @relation(fields: [projectId], references: [id])
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
 
-  milestoneId   String?   @unique
-  milestone     Milestone? @relation(fields: [milestoneId], references: [id])
+  milestoneId String?    @unique
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id])
 
-  completedWork String
-  remainingWork String
+  completedWork  String
+  remainingWork  String
   technicalNotes String?
-  knownIssues   String?
-  nextSteps     String?
+  knownIssues    String?
+  nextSteps      String?
   filesAndAccess String?
 
-  aiSummary     String?
+  aiSummary String?
 
-  createdAt     DateTime  @default(now())
+  createdAt DateTime @default(now())
 }
 
 model RecoveryBrief {
-  id              String    @id @default(uuid())
-  projectId       String    @unique
-  project         Project   @relation(fields: [projectId], references: [id])
+  id        String  @id @default(uuid())
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id])
 
   completionPercent Float
   aiGeneratedBrief  String
   remainingBudget   Float
 
-  createdAt       DateTime  @default(now())
+  createdAt DateTime @default(now())
+}
+
+model WalletTopUp {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  amount Float
+  status PaymentStatus @default(PENDING)
+
+  utrNumber     String?
+  screenshotUrl String?
+  paymentNote   String?
+
+  submittedAt DateTime?
+  verifiedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EscrowHold {
+  id        String  @id @default(uuid())
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id])
+
+  totalAmount    Float
+  heldAmount     Float
+  releasedAmount Float @default(0)
+  refundedAmount Float @default(0)
+
+  status EscrowStatus @default(HOLDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MilestoneReleaseRequest {
+  id          String    @id @default(uuid())
+  milestoneId String    @unique
+  milestone   Milestone @relation(fields: [milestoneId], references: [id])
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  freelancerId String
+  freelancer   User   @relation("FreelancerReleaseRequests", fields: [freelancerId], references: [id])
+
+  amount         Float
+  approvedAmount Float?
+  status         ReleaseStatus @default(PENDING)
+
+  adminNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PendingHire {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  applicationId String      @unique
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  recruiterId String
+  recruiter   User   @relation("RecruiterHires", fields: [recruiterId], references: [id])
+
+  freelancerId String
+  freelancer   User   @relation("FreelancerHires", fields: [freelancerId], references: [id])
+
+  amount        Float
+  paymentMethod String
+
+  utrNumber     String?
+  screenshotUrl String?
+
+  status HirePaymentStatus @default(PENDING_PAYMENT)
+
+  adminNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -1,22 +1,25 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
     const supabase = await createSupabaseServerClient();
 
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
+      data: { user: authUser },
+      error,
+    } = await supabase.auth.getUser();
 
-    if (!session?.user?.email) return NextResponse.json({ user: null });
+    if (error || !authUser?.email) {
+      return NextResponse.json({ user: null });
+    }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: authUser.email },
     });
 
-    return NextResponse.json({ user });
+    return NextResponse.json({ user: user ?? null });
   } catch {
     return NextResponse.json({ user: null });
   }

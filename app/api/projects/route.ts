@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { getUserByEmail } from "@/services/user.service";
-import {
-  createProject,
-  getOpenProjects,
-} from "@/services/project.service";
+import { getAuthUser } from "@/lib/get-auth-user";
+import { createProject, getOpenProjects } from "@/services/project.service";
 
 export async function GET(req: Request) {
   try {
@@ -25,14 +21,11 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createSupabaseServerClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.email) {
+    const user = await getAuthUser();
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const user = await getUserByEmail(session.user.email);
-    if (!user || user.role !== "RECRUITER") {
+    if (user.role !== "RECRUITER") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

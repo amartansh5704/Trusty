@@ -36,27 +36,33 @@ export default function Navbar({ user }: NavbarProps) {
 
           <div className="flex items-center gap-4">
             {user.role === "RECRUITER" && (
-              <>
-                <Link
-                  href="/dashboard/recruiter"
-                  className="text-gray-300 hover:text-white text-sm"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/projects/new"
-                  className="text-gray-300 hover:text-white text-sm"
-                >
-                  Post Project
-                </Link>
-                <Link
-                  href="/freelancers"
-                  className="text-gray-300 hover:text-white text-sm"
-                >
-                  Browse Freelancers
-                </Link>
-              </>
-            )}
+  <>
+    <Link
+      href="/dashboard/recruiter"
+      className="text-gray-300 hover:text-white text-sm"
+    >
+      Dashboard
+    </Link>
+    <Link
+      href="/projects/new"
+      className="text-gray-300 hover:text-white text-sm"
+    >
+      Post Project
+    </Link>
+    <Link
+      href="/wallet"
+      className="text-gray-300 hover:text-white text-sm"
+    >
+      Wallet
+    </Link>
+    <Link
+      href="/freelancers"
+      className="text-gray-300 hover:text-white text-sm"
+    >
+      Browse Freelancers
+    </Link>
+  </>
+)}
             {user.role === "FREELANCER" && (
               <>
                 <Link

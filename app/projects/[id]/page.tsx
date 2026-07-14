@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { getProjectById } from "@/services/project.service";
 import DashboardLayout from "@/components/layout/dashboard-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -14,7 +14,6 @@ import {
   MessageSquare,
   AlertTriangle,
   ArrowLeft,
-  Wallet,
 } from "lucide-react";
 import { formatCurrency, formatDate, getCreditTier } from "@/lib/utils";
 
@@ -45,10 +44,10 @@ export default async function ProjectDetailPage({
 
   const tier = getCreditTier(user.creditBalance);
   const canApply =
-  user.role === "FREELANCER" &&
-  project.status === "OPEN" &&
-  !hasApplied &&
-  !isFreelancer;
+    user.role === "FREELANCER" &&
+    project.status === "OPEN" &&
+    !hasApplied &&
+    !isFreelancer;
 
   const completedMilestones = project.milestones.filter(
     (m) => m.status === "APPROVED"
@@ -88,16 +87,14 @@ export default async function ProjectDetailPage({
             </Button>
           </Link>
           <h1 className="text-2xl font-bold text-white">{project.title}</h1>
-          <Badge
-            variant="outline"
-            className={statusColors[project.status]}
-          >
+          <Badge variant="outline" className={statusColors[project.status]}>
             {project.status.replace("_", " ")}
           </Badge>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
           <div className="md:col-span-2 space-y-6">
+            {/* Project Info */}
             <Card className="bg-gray-900 border-gray-800">
               <CardContent className="p-6">
                 <p className="text-gray-300 leading-relaxed">
@@ -160,6 +157,7 @@ export default async function ProjectDetailPage({
               </CardContent>
             </Card>
 
+            {/* Milestones */}
             <div>
               <h2 className="text-lg font-bold text-white mb-3">
                 Milestones ({project.milestones.length})
@@ -178,6 +176,7 @@ export default async function ProjectDetailPage({
               </div>
             </div>
 
+            {/* Applications */}
             {isRecruiter && project.applications.length > 0 && (
               <div>
                 <h2 className="text-lg font-bold text-white mb-3">
@@ -189,6 +188,8 @@ export default async function ProjectDetailPage({
                       key={application.id}
                       application={application}
                       projectStatus={project.status}
+                      projectAmount={project.totalAmount}
+                      recruiterWalletBalance={user.walletBalance}
                     />
                   ))}
                 </div>
@@ -196,25 +197,26 @@ export default async function ProjectDetailPage({
             )}
           </div>
 
+          {/* Sidebar */}
           <div className="space-y-4">
             {canApply && (
-  <Card className="bg-gray-900 border-yellow-400/30">
-    <CardContent className="p-4">
-      <h3 className="text-white font-semibold mb-2">
-        Apply for this Project
-      </h3>
-      <p className="text-gray-400 text-sm mb-3">
-        A {tier.stakePercent}% credit stake ({tier.stakePercent}% of project value) 
-        will be required if you are hired.
-      </p>
-      <Link href={`/projects/${id}/apply`}>
-        <Button className="w-full bg-yellow-400 text-black hover:bg-yellow-300 font-semibold">
-          Apply Now
-        </Button>
-      </Link>
-    </CardContent>
-  </Card>
-)}
+              <Card className="bg-gray-900 border-yellow-400/30">
+                <CardContent className="p-4">
+                  <h3 className="text-white font-semibold mb-2">
+                    Apply for this Project
+                  </h3>
+                  <p className="text-gray-400 text-sm mb-3">
+                    A {tier.stakePercent}% credit stake will be required if you
+                    are hired.
+                  </p>
+                  <Link href={`/projects/${id}/apply`}>
+                    <Button className="w-full bg-yellow-400 text-black hover:bg-yellow-300 font-semibold">
+                      Apply Now
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
 
             {hasApplied && !isFreelancer && (
               <Card className="bg-gray-900 border-gray-800">
@@ -245,9 +247,7 @@ export default async function ProjectDetailPage({
                     {isRecruiter &&
                       project.status !== "COMPLETED" &&
                       project.status !== "DISPUTED" && (
-                        <Link
-                          href={`/disputes/new/${project.id}`}
-                        >
+                        <Link href={`/disputes/new/${project.id}`}>
                           <Button
                             variant="outline"
                             className="w-full border-red-800 text-red-400 hover:bg-red-900/20 mt-2"
@@ -260,29 +260,6 @@ export default async function ProjectDetailPage({
                   </CardContent>
                 </Card>
               )}
-
-            {isRecruiter && project.status === "OPEN" && (
-              <Card className="bg-gray-900 border-gray-800">
-                <CardContent className="p-4">
-                  <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
-                    <Wallet className="h-4 w-4 text-yellow-400" />
-                    Escrow Payment
-                  </h3>
-                  <p className="text-gray-400 text-sm mb-3">
-                    Deposit{" "}
-                    <span className="text-white font-semibold">
-                      {formatCurrency(project.totalAmount)}
-                    </span>{" "}
-                    into escrow to activate hiring.
-                  </p>
-                  <Link href={`/projects/${project.id}/payment`}>
-                    <Button className="w-full bg-yellow-400 text-black hover:bg-yellow-300 font-semibold">
-                      Pay Into Escrow
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            )}
 
             {project.freelancer && (
               <Card className="bg-gray-900 border-gray-800">

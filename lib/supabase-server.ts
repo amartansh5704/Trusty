@@ -18,8 +18,7 @@ export async function createSupabaseServerClient() {
               cookieStore.set(name, value, options);
             });
           } catch {
-            // In some contexts cookies may be read-only.
-            // For auth.getSession(), we mainly need getAll().
+            // Called from Server Component — safe to ignore
           }
         },
       },

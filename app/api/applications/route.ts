@@ -1,24 +1,19 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { getUserByEmail } from "@/services/user.service";
+import { getAuthUser } from "@/lib/get-auth-user";
 import {
   createApplication,
   getApplicationByFreelancerAndProject,
 } from "@/services/application.service";
 import { getProjectForAuth } from "@/services/project.service";
 import { createNotification } from "@/services/notification.service";
-import { getCreditTier } from "@/lib/utils";
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createSupabaseServerClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.email) {
+    const user = await getAuthUser();
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const user = await getUserByEmail(session.user.email);
-    if (!user || user.role !== "FREELANCER") {
+    if (user.role !== "FREELANCER") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -33,14 +28,6 @@ export async function POST(req: Request) {
     if (project.status !== "OPEN") {
       return NextResponse.json(
         { error: "Project is not accepting applications" },
-        { status: 400 }
-      );
-    }
-
-    const tier = getCreditTier(user.creditBalance);
-    if (project.totalAmount > tier.maxProjectValue) {
-      return NextResponse.json(
-        { error: `Your credit tier only allows projects up to ₹${tier.maxProjectValue}` },
         { status: 400 }
       );
     }
