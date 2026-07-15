@@ -6,6 +6,7 @@ import DashboardLayout from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import RelayPendingSection from "@/components/projects/relay-pending-section";
 import {
   Search,
   Wallet,
@@ -66,6 +67,7 @@ export default async function FreelancerDashboard() {
     COMPLETED: "bg-green-500/10 text-green-400 border-green-500/30",
     CANCELLED: "bg-gray-500/10 text-gray-400 border-gray-500/30",
     DISPUTED: "bg-red-500/10 text-red-400 border-red-500/30",
+    RELAY_PENDING: "bg-orange-500/10 text-orange-400 border-orange-500/30",
   };
 
   return (
@@ -157,6 +159,9 @@ export default async function FreelancerDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Relay Pending Projects */}
+<RelayPendingSection userId={user.id} />
 
       <h2 className="text-xl font-bold text-white mb-4">Your Projects</h2>
 

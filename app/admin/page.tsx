@@ -15,6 +15,7 @@ import {
   LogOut,
   Clock,
   UserCheck,
+  Ghost,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useUser } from "@/hooks/use-user";
@@ -24,6 +25,7 @@ type AdminStats = {
   pendingTopUps: number;
   pendingReleases: number;
   pendingHires: number;
+  ghostAlerts: number;
   totalEscrowHeld: number;
   totalUsers: number;
   totalProjects: number;
@@ -90,6 +92,9 @@ export default function AdminDashboard() {
               <Link href="/admin/escrow/list" className="text-gray-300 hover:text-white text-sm">
                 Escrow
               </Link>
+              <Link href="/admin/relay/list" className="text-gray-300 hover:text-white text-sm">
+  Relay
+</Link>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -125,6 +130,16 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </Link>
+
+          <Link href="/admin/relay/list">
+  <Card className="bg-gray-900 border-gray-800 hover:border-yellow-400/30 transition-colors cursor-pointer">
+    <CardContent className="p-5 text-center">
+      <Ghost className="h-6 w-6 text-orange-400 mx-auto mb-2" />
+      <p className="text-3xl font-bold text-white">{stats?.ghostAlerts ?? 0}</p>
+      <p className="text-gray-400 text-sm mt-1">Ghost Alerts</p>
+    </CardContent>
+  </Card>
+</Link>
 
           <Link href="/admin/escrow/list">
             <Card className="bg-gray-900 border-gray-800 hover:border-yellow-400/30 transition-colors cursor-pointer">
@@ -216,6 +231,21 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </Link>
+          <Link href="/admin/relay/list">
+  <Card className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-colors cursor-pointer">
+    <CardContent className="p-5">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-orange-400/10 flex items-center justify-center">
+          <Ghost className="h-5 w-5 text-orange-400" />
+        </div>
+        <div>
+          <p className="text-white font-semibold">Ghost Alerts & Relay</p>
+          <p className="text-gray-400 text-sm">Review alerts and trigger recovery</p>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+</Link>
         </div>
       </main>
     </div>

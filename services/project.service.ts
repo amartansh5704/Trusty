@@ -79,6 +79,18 @@ export async function getProjectById(id: string) {
       payments: {
         orderBy: { createdAt: "desc" },
       },
+      backupRelaySlots: {
+        select: {
+          id: true,
+          freelancerId: true,
+          order: true,
+          status: true,
+          freelancer: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { order: "asc" },
+      },
     },
   });
 }

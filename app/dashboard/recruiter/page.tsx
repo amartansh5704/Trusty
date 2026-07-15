@@ -32,6 +32,7 @@ export default async function RecruiterDashboard() {
     COMPLETED: "bg-green-500/10 text-green-400 border-green-500/30",
     CANCELLED: "bg-gray-500/10 text-gray-400 border-gray-500/30",
     DISPUTED: "bg-red-500/10 text-red-400 border-red-500/30",
+    RELAY_PENDING: "bg-orange-500/10 text-orange-400 border-orange-500/30",
   };
 
   return (

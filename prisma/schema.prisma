@@ -19,6 +19,7 @@ enum ProjectStatus {
   COMPLETED
   CANCELLED
   DISPUTED
+  RELAY_PENDING
 }
 
 enum MilestoneStatus {
@@ -120,6 +121,12 @@ model User {
   escrowReleaseRequests MilestoneReleaseRequest[] @relation("FreelancerReleaseRequests")
   recruiterHires        PendingHire[]             @relation("RecruiterHires")
   freelancerHires       PendingHire[]             @relation("FreelancerHires")
+  backupSlots           BackupRelaySlot[]         @relation("BackupSlots")
+  dossierEntries        DossierEntry[]            @relation("DossierEntries")
+  ghostAlertsRaised     GhostAlert[]              @relation("GhostAlertsRaised")
+  ghostAlertsAgainst    GhostAlert[]              @relation("GhostAlertsAgainst")
+  recoveryTriggered     RecoveryEvent[]           @relation("RecoveryTriggered")
+  recoveryPrevious      RecoveryEvent[]           @relation("RecoveryPrevious")
 }
 
 model Project {
@@ -146,16 +153,20 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  milestones      Milestone[]
-  applications    Application[]
-  payments        Payment[]
-  disputes        Dispute[]
-  messages        Message[]
-  stateDocs       StateDocument[]
-  recoveryBrief   RecoveryBrief?
-  escrowHold      EscrowHold?
-  releaseRequests MilestoneReleaseRequest[]
-  pendingHires    PendingHire[]
+  milestones       Milestone[]
+  applications     Application[]
+  payments         Payment[]
+  disputes         Dispute[]
+  messages         Message[]
+  stateDocs        StateDocument[]
+  recoveryBrief    RecoveryBrief?
+  escrowHold       EscrowHold?
+  releaseRequests  MilestoneReleaseRequest[]
+  pendingHires     PendingHire[]
+  backupRelaySlots BackupRelaySlot[]
+  dossierEntries   DossierEntry[]
+  ghostAlert       GhostAlert?
+  recoveryEvent    RecoveryEvent?
 }
 
 model Milestone {
@@ -183,6 +194,7 @@ model Milestone {
   stateDoc       StateDocument?
   payment        Payment?
   releaseRequest MilestoneReleaseRequest?
+  dossierEntries DossierEntry[]
 }
 
 model Application {
@@ -431,6 +443,118 @@ model PendingHire {
   status HirePaymentStatus @default(PENDING_PAYMENT)
 
   adminNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum RelaySlotStatus {
+  STANDBY
+  NOTIFIED
+  ACCEPTED
+  DECLINED
+  SKIPPED
+  ACTIVE
+}
+
+enum GhostAlertStatus {
+  RAISED
+  CONFIRMED
+  DISMISSED
+}
+
+enum RecoveryStatus {
+  PENDING
+  BRIEF_GENERATED
+  RELAY_NOTIFIED
+  ACCEPTED
+  CANCELLED
+}
+
+model BackupRelaySlot {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  freelancerId String
+  freelancer   User   @relation("BackupSlots", fields: [freelancerId], references: [id])
+
+  order  Int
+  status RelaySlotStatus @default(STANDBY)
+
+  notifiedAt  DateTime?
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, freelancerId])
+  @@unique([projectId, order])
+}
+
+model DossierEntry {
+  id String @id @default(uuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  milestoneId String?
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id])
+
+  authorId String
+  author   User   @relation("DossierEntries", fields: [authorId], references: [id])
+
+  completedWork  String
+  remainingWork  String
+  technicalNotes String?
+  knownIssues    String?
+  nextSteps      String?
+  filesAndAccess String?
+
+  aiSummary String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GhostAlert {
+  id String @id @default(uuid())
+
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id])
+
+  raisedById String
+  raisedBy   User   @relation("GhostAlertsRaised", fields: [raisedById], references: [id])
+
+  freelancerId String
+  freelancer   User   @relation("GhostAlertsAgainst", fields: [freelancerId], references: [id])
+
+  note   String?
+  status GhostAlertStatus @default(RAISED)
+
+  raisedAt    DateTime  @default(now())
+  confirmedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+model RecoveryEvent {
+  id String @id @default(uuid())
+
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id])
+
+  triggeredById String
+  triggeredBy   User   @relation("RecoveryTriggered", fields: [triggeredById], references: [id])
+
+  previousFreelancerId String
+  previousFreelancer   User   @relation("RecoveryPrevious", fields: [previousFreelancerId], references: [id])
+
+  completionPercent Float   @default(0)
+  aiGeneratedBrief  String?
+  remainingBudget   Float   @default(0)
+
+  status RecoveryStatus @default(PENDING)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

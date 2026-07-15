@@ -13,6 +13,7 @@ import { showSuccess, showError } from "@/lib/toast";
 export default function OnboardingPage() {
   const [step, setStep] = useState<"role" | "profile">("role");
   const [role, setRole] = useState<"FREELANCER" | "RECRUITER" | null>(null);
+  const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [skills, setSkills] = useState("");
   const [portfolioUrl, setPortfolioUrl] = useState("");
@@ -32,6 +33,7 @@ export default function OnboardingPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        name,
         role,
         bio,
         skills: skills
@@ -128,6 +130,25 @@ export default function OnboardingPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+
+            {/* Name field — always shown for both roles */}
+            <div>
+              <Label htmlFor="name" className="text-gray-300">
+                Your Name
+              </Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={
+                  role === "FREELANCER" ? "John Doe" : "Jane Smith"
+                }
+                required
+                className="bg-gray-800 border-gray-700 text-white mt-1"
+              />
+            </div>
+
+            {/* Bio field */}
             <div>
               <Label htmlFor="bio" className="text-gray-300">
                 {role === "FREELANCER" ? "About You" : "About Your Company"}
@@ -147,6 +168,7 @@ export default function OnboardingPage() {
               />
             </div>
 
+            {/* Freelancer-only fields */}
             {role === "FREELANCER" && (
               <>
                 <div>

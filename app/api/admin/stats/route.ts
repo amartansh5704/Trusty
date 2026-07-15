@@ -1,21 +1,14 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { getUserByEmail } from "@/services/user.service";
+import { getAuthUser } from "@/lib/get-auth-user";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.user?.email) {
+    const user = await getAuthUser();
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const user = await getUserByEmail(session.user.email);
-    if (!user || user.role !== "ADMIN") {
+    if (user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -23,6 +16,7 @@ export async function GET() {
       pendingTopUps,
       pendingReleases,
       pendingHires,
+      ghostAlerts,
       escrowHolds,
       totalUsers,
       totalProjects,
@@ -31,6 +25,7 @@ export async function GET() {
       prisma.walletTopUp.count({ where: { status: "SUBMITTED" } }),
       prisma.milestoneReleaseRequest.count({ where: { status: "PENDING" } }),
       prisma.pendingHire.count({ where: { status: "PAYMENT_SUBMITTED" } }),
+      prisma.ghostAlert.count({ where: { status: "RAISED" } }),
       prisma.escrowHold.aggregate({
         _sum: { heldAmount: true },
         where: {
@@ -46,6 +41,7 @@ export async function GET() {
       pendingTopUps,
       pendingReleases,
       pendingHires,
+      ghostAlerts,
       totalEscrowHeld: escrowHolds._sum.heldAmount ?? 0,
       totalUsers,
       totalProjects,

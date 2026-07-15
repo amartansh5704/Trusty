@@ -9,11 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import MilestoneCard from "@/components/projects/milestone-card";
 import ApplicationCard from "@/components/projects/application-card";
+import GhostAlertButton from "@/components/projects/ghost-alert-button";
 import {
   Calendar,
   MessageSquare,
   AlertTriangle,
   ArrowLeft,
+  FileText,
 } from "lucide-react";
 import { formatCurrency, formatDate, getCreditTier } from "@/lib/utils";
 
@@ -32,11 +34,14 @@ export default async function ProjectDetailPage({
 
   const isRecruiter = user.id === project.recruiterId;
   const isFreelancer = user.id === project.freelancerId;
-  const canView = isRecruiter || isFreelancer || user.role === "ADMIN";
+  const isBackupFreelancer = project.backupRelaySlots?.some(
+  (slot: any) => slot.freelancerId === user.id
+) ?? false;
+const canView = isRecruiter || isFreelancer || isBackupFreelancer || user.role === "ADMIN";
 
-  if (!canView && project.status !== "OPEN") {
-    redirect("/projects/browse");
-  }
+if (!canView && project.status !== "OPEN") {
+  redirect("/projects/browse");
+}
 
   const hasApplied = project.applications.some(
     (a) => a.freelancerId === user.id
@@ -63,6 +68,7 @@ export default async function ProjectDetailPage({
     COMPLETED: "bg-green-500/10 text-green-400 border-green-500/30",
     CANCELLED: "bg-gray-500/10 text-gray-400 border-gray-500/30",
     DISPUTED: "bg-red-500/10 text-red-400 border-red-500/30",
+    RELAY_PENDING: "bg-orange-500/10 text-orange-400 border-orange-500/30",
   };
 
   return (
@@ -190,6 +196,7 @@ export default async function ProjectDetailPage({
                       projectStatus={project.status}
                       projectAmount={project.totalAmount}
                       recruiterWalletBalance={user.walletBalance}
+                      projectId={project.id}
                     />
                   ))}
                 </div>
@@ -232,34 +239,47 @@ export default async function ProjectDetailPage({
             )}
 
             {(isRecruiter || isFreelancer) &&
-              project.status === "IN_PROGRESS" && (
-                <Card className="bg-gray-900 border-gray-800">
-                  <CardContent className="p-4 space-y-2">
-                    <Link href={`/projects/${project.id}/messages`}>
-                      <Button
-                        variant="outline"
-                        className="w-full border-gray-700 text-white hover:bg-gray-800"
-                      >
-                        <MessageSquare className="h-4 w-4 mr-2" />
-                        Project Chat
-                      </Button>
-                    </Link>
-                    {isRecruiter &&
-                      project.status !== "COMPLETED" &&
-                      project.status !== "DISPUTED" && (
-                        <Link href={`/disputes/new/${project.id}`}>
-                          <Button
-                            variant="outline"
-                            className="w-full border-red-800 text-red-400 hover:bg-red-900/20 mt-2"
-                          >
-                            <AlertTriangle className="h-4 w-4 mr-2" />
-                            Raise Dispute
-                          </Button>
-                        </Link>
-                      )}
-                  </CardContent>
-                </Card>
-              )}
+  project.status === "IN_PROGRESS" && (
+    <Card className="bg-gray-900 border-gray-800">
+      <CardContent className="p-4 space-y-2">
+        <Link href={`/projects/${project.id}/dossier`}>
+          <Button
+            variant="outline"
+            className="w-full border-gray-700 text-white hover:bg-gray-800"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Project Dossier
+          </Button>
+        </Link>
+        <Link href={`/projects/${project.id}/messages`}>
+          <Button
+            variant="outline"
+            className="w-full border-gray-700 text-white hover:bg-gray-800"
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Project Chat
+          </Button>
+        </Link>
+        {isRecruiter && (
+          <GhostAlertButton
+            projectId={project.id}
+            freelancerName={project.freelancer?.name ?? "Freelancer"}
+          />
+        )}
+        {isRecruiter && (
+  <Link href={`/disputes/new/${project.id}`}>
+    <Button
+      variant="outline"
+      className="w-full border-red-800 text-red-400 hover:bg-red-900/20 mt-2"
+    >
+      <AlertTriangle className="h-4 w-4 mr-2" />
+      Raise Dispute
+    </Button>
+  </Link>
+)}
+      </CardContent>
+    </Card>
+  )}
 
             {project.freelancer && (
               <Card className="bg-gray-900 border-gray-800">

@@ -26,12 +26,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { name, role, bio, skills, portfolioUrl } = body;
 
-    if (!name || !role) {
-      return NextResponse.json(
-        { error: "Name and role are required" },
-        { status: 400 }
-      );
-    }
+   
 
     const validRoles = ["FREELANCER", "RECRUITER", "ADMIN"];
     if (!validRoles.includes(role)) {
