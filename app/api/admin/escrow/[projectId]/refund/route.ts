@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { getUserByEmail } from "@/services/user.service";
+import { getAuthUser } from "@/lib/get-auth-user";
 import { refundEscrow } from "@/services/escrow.service";
 import { createNotification } from "@/services/notification.service";
 import { prisma } from "@/lib/prisma";
@@ -12,17 +11,11 @@ export async function POST(
   const { projectId } = await params;
 
   try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.user?.email) {
+    const user = await getAuthUser();
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const admin = await getUserByEmail(session.user.email);
-    if (!admin || admin.role !== "ADMIN") {
+    if (user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
